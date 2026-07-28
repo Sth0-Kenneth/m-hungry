@@ -1,0 +1,1 @@
+const hits=new Map<string,{count:number;reset:number}>();export function rateLimit(key:string,limit=10,windowMs=60000){const now=Date.now(),found=hits.get(key);if(!found||found.reset<now){hits.set(key,{count:1,reset:now+windowMs});return true}if(found.count>=limit)return false;found.count++;return true}

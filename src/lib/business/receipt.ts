@@ -1,0 +1,1 @@
+export function parseMoney(value:string){const normalized=value.replace(/[^0-9,.-]/g,"").replace(/,(?=\d{3}(?:\D|$))/g,"");if(!/[0-9]/.test(normalized))return null;const result=Number(normalized.replace(",","."));return Number.isFinite(result)?result:null}

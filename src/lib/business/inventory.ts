@@ -1,0 +1,1 @@
+export function reduceQuantity(current:number,used:number){if(!Number.isFinite(current)||!Number.isFinite(used)||used<=0)throw new Error("Usage must be positive");if(used>current)throw new Error("Usage cannot exceed available quantity");const remaining=Math.max(0,current-used);return{remaining,depleted:remaining===0}}
