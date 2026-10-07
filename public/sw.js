@@ -33,3 +33,20 @@ self.addEventListener("fetch", (event) => {
     fetch(event.request).catch(() => caches.match("/offline")),
   );
 });
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try { payload = event.data?.json() ?? {}; } catch { payload = { notification: { title: "mHungry", body: event.data?.text() } }; }
+  const notification = payload.notification ?? payload.data ?? {};
+  event.waitUntil(self.registration.showNotification(notification.title ?? "mHungry", {
+    body: notification.body ?? "You have a food expiration reminder.",
+    icon: "/icon.svg",
+    badge: "/icon.svg",
+    data: { url: payload.fcmOptions?.link ?? payload.data?.url ?? "/dashboard" },
+  }));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(self.clients.openWindow(event.notification.data?.url ?? "/dashboard"));
+});

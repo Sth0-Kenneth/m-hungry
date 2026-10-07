@@ -1,3 +1,1 @@
-import { PhaseNotice } from "@/components/phase-notice";
-import { getI18n } from "@/lib/i18n/server";
-export default async function Page() { const { t } = await getI18n(); return <PhaseNotice phase={t("phase.three")} title={t("phase.foodTitle")} description={t("phase.foodCopy")} />; }
+import { FoodScanner } from "@/components/food-scanner";import { PageHeader } from "@/components/page-header";import { getI18n } from "@/lib/i18n/server";export default async function Page(){const {locale}=await getI18n();return <main className="page max-w-2xl"><PageHeader eyebrow={locale==="ja"?"AIスキャン":"AI scan"} title={locale==="ja"?"食品を認識":"Recognize food"} description={locale==="ja"?"写真から食品を検出し、編集してから在庫に保存します。":"Detect foods from a photo, then edit and confirm before saving."}/><FoodScanner/></main>}

@@ -6,6 +6,7 @@ import { LoaderCircle, AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { CameraCapture } from "./camera-capture";
 import { useI18n } from "./locale-provider";
 import { createClient } from "@/lib/supabase/client";
+import { imageStoragePath, imageUploadDetails } from "@/lib/image-upload";
 import type { ReceiptDraft } from "@/lib/types";
 import { receiptAiSchema } from "@/lib/validation";
 import { toast } from "sonner";
@@ -29,11 +30,11 @@ export function ReceiptScanner() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error(t("receipt.sessionExpired"));
-      const now = new Date();
-      const path = `${user.id}/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${crypto.randomUUID()}.jpg`;
+      const upload = imageUploadDetails(file);
+      const path = imageStoragePath(user.id, upload.extension);
       const { error: uploadError } = await supabase.storage
         .from("receipts")
-        .upload(path, file, { contentType: "image/jpeg", upsert: false });
+        .upload(path, file, { contentType: upload.contentType, upsert: false });
       if (uploadError) throw new Error(t("receipt.uploadFailed"));
       setImagePath(path);
       const response = await fetch("/api/ai/process-receipt", {

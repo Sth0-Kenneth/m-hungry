@@ -6,6 +6,8 @@ import { LoaderCircle, Leaf } from "lucide-react";
 import { login, register, type AuthState } from "@/app/auth-actions";
 import { LanguageSwitcher } from "./language-switcher";
 import { useI18n } from "./locale-provider";
+import { LineAuthButton } from "./line-auth-button";
+import { env } from "@/lib/env";
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const { t } = useI18n();
@@ -28,7 +30,17 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           <p className="mt-2 text-sm text-[#687970]">
             {t(mode === "login" ? "auth.loginCopy" : "auth.registerCopy")}
           </p>
-          <form action={formAction} className="mt-7 space-y-4">
+          {env.NEXT_PUBLIC_LINE_LOGIN_ENABLED === "true" && (
+            <>
+              <div className="mt-6"><LineAuthButton /></div>
+              <div className="my-5 flex items-center gap-3 text-xs text-[#687970]">
+                <span className="h-px flex-1 bg-[#dfe5de]" />
+                <span>{t("auth.orEmail")}</span>
+                <span className="h-px flex-1 bg-[#dfe5de]" />
+              </div>
+            </>
+          )}
+          <form action={formAction} className="space-y-4">
             {mode === "register" && (
               <label>
                 <span className="label">{t("auth.displayName")}</span>

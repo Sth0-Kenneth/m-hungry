@@ -34,6 +34,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # temporary Office files
 ~$*
@@ -45,5 +46,14 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-.vercel
-.env*
+# local tooling and generated presentation/video assets
+/.agents/
+/skills-lock.json
+/*.pptx.inspect.ndjson
+/*.webm
+/mhungry-loop.html
+/mhungry-video/
+/outputs/
+/release/
+/render-mhungry-loop.mjs
+/supabase/.temp/

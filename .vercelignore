@@ -1,0 +1,18 @@
+# Local agent metadata and generated presentation/video assets
+.agents/
+skills-lock.json
+*.pptx
+*.webm
+mhungry-loop.html
+mhungry-video/
+render-mhungry-loop.mjs
+
+# Local Supabase and build state
+supabase/.temp/
+.next/
+coverage/
+*.tsbuildinfo
+
+# Local environment files must never be uploaded
+.env*
+!.env.example

@@ -90,6 +90,15 @@ export default function ConfirmAccountPage() {
         return;
       }
 
+      if (query.get("line") === "1") {
+        const { data: sessionData } = await supabase.auth.getSession();
+        await fetch("/api/line/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ providerToken: sessionData.session?.provider_token }),
+        }).catch(() => undefined);
+      }
+
       window.location.replace(next);
     }
 

@@ -1,0 +1,9 @@
+"use client";
+import { useState } from "react";
+import { LoaderCircle, Utensils } from "lucide-react";
+import { useRouter } from "next/navigation";
+import type { RecipeIngredient } from "@/lib/types";
+import { useI18n } from "./locale-provider";
+
+export function CookRecipeButton({ingredients}:{ingredients:RecipeIngredient[]}){const {locale}=useI18n();const ja=locale==="ja";const router=useRouter();const usable=ingredients.filter((item)=>item.inventoryItemId);const [open,setOpen]=useState(false);const [busy,setBusy]=useState(false);const [error,setError]=useState("");async function cook(){setBusy(true);setError("");const response=await fetch("/api/recipes/cook",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:usable.map((i)=>({inventoryItemId:i.inventoryItemId,quantity:i.quantity,unit:i.unit}))})});const body=await response.json();setBusy(false);if(!response.ok){setError(body.error);return;}setOpen(false);router.refresh();}
+ if(!usable.length)return null;return <div className="mt-6">{!open?<button className="btn-primary" onClick={()=>setOpen(true)}><Utensils size={18}/>{ja?"このレシピを作る":"Cook this recipe"}</button>:<div className="rounded-xl border border-amber-300 bg-amber-50 p-4"><h3 className="font-sans font-bold">{ja?"在庫から差し引く量を確認":"Confirm inventory deductions"}</h3><ul className="mt-3 list-disc space-y-1 pl-5 text-sm">{usable.map((i)=><li key={i.inventoryItemId}>{i.name}: {i.quantity} {i.unit}</li>)}</ul><p className="mt-3 text-xs">{ja?"確定すると元に戻せません。":"This action records cooking usage and cannot be automatically undone."}</p>{error&&<p className="mt-2 text-sm text-red-800">{error}</p>}<div className="mt-4 flex gap-2"><button className="btn-primary" disabled={busy} onClick={cook}>{busy&&<LoaderCircle className="animate-spin"/>}{ja?"確認して差し引く":"Confirm and subtract"}</button><button className="btn-secondary" onClick={()=>setOpen(false)}>{ja?"キャンセル":"Cancel"}</button></div></div>}</div>}

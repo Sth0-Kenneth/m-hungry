@@ -1,6 +1,8 @@
 # mHungry
 
-mHungry is a mobile-first household food inventory. This repository contains the working Phase 1 and Phase 2 MVP: Supabase email/password authentication, per-user inventory, expiration status, usage logs, dashboard summaries, private camera uploads, Japanese-capable receipt extraction, editable confirmation, purchases, and selected receipt items added to inventory. The complete interface can be switched between English and Japanese.
+English | [日本語](README.ja.md)
+
+mHungry is a mobile-first household food inventory with working Phases 1–5: authentication, inventory and usage, receipt/food/expiration scanning, inventory-aware recipe generation and web search, expiration reminders, web push, and PWA support. The interface can be switched between English and Japanese.
 
 AI results are suggestions only. Users must confirm every scanned value. Expiration dates alone do not establish food safety.
 
@@ -8,7 +10,7 @@ AI results are suggestions only. Users must confirm every scanned value. Expirat
 
 - Next.js 16 App Router, React 19, TypeScript, Tailwind CSS 4
 - Supabase PostgreSQL, Auth, private Storage, and RLS
-- OpenAI Responses API through a server route, with `USE_MOCK_AI` fallback
+- Gemini Interactions API through server routes, with `USE_MOCK_AI` fallback
 - Zod, React Hook Form-ready form architecture, Lucide icons, Vitest
 - PWA manifest and conservative offline service worker
 - Vercel-compatible deployment
@@ -24,14 +26,16 @@ AI results are suggestions only. Users must confirm every scanned value. Expirat
 - Dashboard active count, expiration summaries, recent additions, today's usage, waste value
 - Reusable rear-camera/gallery capture with image resizing and permission/error states
 - Private receipt upload under `{userId}/{year}/{month}/{uuid}.jpg`
-- Server-only OpenAI receipt processing with a safe Japanese mock fallback
+- Server-only Gemini receipt processing with a safe Japanese mock fallback
 - Editable store, date, total, original OCR name, normalized name, quantity, unit, and price
 - Atomic receipt, purchase, purchase-item, and chosen inventory insertion
 - Purchase history and details
 - Full initial schema, indexes, foreign keys, RLS, private bucket policies, and RPCs
 - Tests for critical business rules, PWA shell, privacy/safety notices
-
-Phase 3 scanning and Phase 4 recipes have protected route placeholders so navigation is stable; they are intentionally not represented as completed functionality in this Phase 1–2 milestone. Firebase reminders are Phase 5.
+- Food-photo recognition and expiration-label extraction with Zod validation and explicit confirmation
+- Inventory-aware AI recipes, missing-ingredient disclosure, saved history, and confirmed cooking deductions
+- Dedicated original-source web recipe search with inventory prioritization, ingredient suggestions, short summaries, and direct links
+- In-app notifications, FCM device registration/removal, reminder controls, and daily protected cron
 
 ## Local setup
 
@@ -53,20 +57,19 @@ Open [http://localhost:3000](http://localhost:3000).
 2. Install the Supabase CLI and authenticate:
 
 ```bash
-pnpm add -D supabase
-pnpm supabase login
-pnpm supabase link --project-ref YOUR_PROJECT_REF
-pnpm supabase db push
+pnpm dlx supabase@latest login
+pnpm dlx supabase@latest link --project-ref YOUR_PROJECT_REF
+pnpm dlx supabase@latest db push
 ```
 
 For a local Supabase stack:
 
 ```bash
-pnpm supabase start
-pnpm supabase db reset
+pnpm dlx supabase@latest start
+pnpm dlx supabase@latest db reset
 ```
 
-The migration at `supabase/migrations/202607220001_initial_schema.sql` creates every requested table, enum, index, trigger, transaction function, RLS policy, private bucket, and storage-object policy. Run it once. Do not manually make either image bucket public.
+The initial migration creates the schema, RLS, buckets, and policies. The `20260901020407_phase_3_5_features.sql` migration adds recipe indexes and an authenticated atomic recipe-usage function. Run all migrations with `pnpm dlx supabase@latest db push`. Do not make either image bucket public.
 
 In Supabase Dashboard → Authentication → URL Configuration:
 
@@ -119,7 +122,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_ANON_KEY
 ```
 
-The browser uses only the anon key. RLS is the security boundary. The service-role key is not used by Phases 1–2.
+The browser uses only the anon key. RLS is the security boundary. The service-role/secret key is used only by the protected reminder cron to query multiple users.
 
 ## Language support
 
@@ -127,9 +130,9 @@ Use the **EN / 日本語** control in the header, sidebar, authentication pages,
 
 Translations live in `src/lib/i18n/dictionaries.ts`. Database enum values and route paths remain language-neutral, so changing the interface language never duplicates or rewrites inventory data. Dates and currency values use the selected locale for display.
 
-## OpenAI and mock mode
+## Gemini and mock mode
 
-Development defaults to free, deterministic receipt samples, including Japanese receipt text:
+Development defaults to deterministic samples for receipts, food, expiration labels, generated recipes, and web recipe results:
 
 ```text
 USE_MOCK_AI=true
@@ -139,19 +142,54 @@ To use live extraction:
 
 ```text
 USE_MOCK_AI=false
-OPENAI_API_KEY=YOUR_KEY
-OPENAI_MODEL=gpt-4.1-mini
+GEMINI_API_KEY=YOUR_KEY
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
-OpenAI is called only from `POST /api/ai/process-receipt`. Signed receipt URLs expire after 60 seconds. Requests time out after 45 seconds. Image bytes and secrets are never logged. Live-model availability and structured-output behavior can change; test the configured model before production.
+Gemini is called only from authenticated server routes. The Interactions API uses structured JSON schemas and multimodal image input. Recipe search accepts only URLs returned as Google Search grounding citations before Gemini creates short summaries. Signed image URLs expire after 60 seconds, requests time out after 45 seconds, malformed structured responses are retried once, and images/secrets are never logged. `GEMINI_API_KEY` belongs in `.env.local` or Vercel Environment Variables—not in the Settings page or any `NEXT_PUBLIC_` variable.
+
+Gemini's free tier has usage limits and Google states that free-tier content may be used to improve its products. Review the current Google AI terms before processing real receipts or food images; keep `USE_MOCK_AI=true` if you do not want images sent to Gemini.
 
 ## Firebase Cloud Messaging
 
-FCM belongs to Phase 5 and is not active in this milestone. The environment placeholders are included so deployment configuration will not need to be renamed. Later setup requires a Firebase web app, VAPID key, Admin service account values, notification permission UI, token registration/removal, and a Firebase messaging service worker.
+1. Create a Firebase project and web app.
+2. Enable Cloud Messaging and create a Web Push certificate/VAPID key.
+3. Add all `NEXT_PUBLIC_FIREBASE_*` values from `.env.example`.
+4. Create a Firebase Admin service account and add `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, and `FIREBASE_ADMIN_PRIVATE_KEY` as server-only secrets.
+5. Redeploy, then enable the current device from Settings. Unsupported/denied browsers still receive in-app notification records.
+
+## LINE Login and push messages
+
+The codebase includes an optional LINE foundation: Supabase custom OIDC login, safe account linking for existing email users, signed follow/unfollow webhooks, per-user opt-in, test messages, and LINE delivery from the expiration reminder cron. It stays hidden until configured.
+
+1. In LINE Developers, create a provider, a **LINE Login** channel, and a **Messaging API** channel. Both channels must be under the same LINE provider so their user IDs match.
+2. Link the LINE Official Account to the LINE Login channel under **Basic settings → Linked LINE Official Account**.
+3. In Supabase Dashboard, open **Authentication → Providers → New Provider**, choose **Auto-discovery (OIDC)**, and configure:
+   - Identifier: `custom:line`
+   - Issuer: `https://access.line.me`
+   - Client ID / secret: the LINE Login channel ID and channel secret
+   - Scopes: `openid profile`
+   - Email optional: enabled (unless LINE has approved your channel for the email scope)
+4. Copy the read-only callback URL shown by Supabase into the LINE Login channel's **Callback URL**. Keep PKCE enabled.
+5. In Supabase Authentication settings, enable manual identity linking. Existing email users should sign in normally and use **Settings → Link LINE account**; this avoids creating a duplicate account.
+6. Apply the latest migration with `pnpm dlx supabase@latest db push`.
+7. Add these variables locally and in Vercel:
+
+```dotenv
+NEXT_PUBLIC_LINE_LOGIN_ENABLED=true
+NEXT_PUBLIC_LINE_OFFICIAL_ACCOUNT_URL=https://lin.ee/your-add-friend-id
+LINE_MESSAGING_CHANNEL_ACCESS_TOKEN=your-long-lived-channel-access-token
+LINE_MESSAGING_CHANNEL_SECRET=your-messaging-channel-secret
+```
+
+8. Set the Messaging API webhook URL to `https://your-domain.example/api/line/webhook`, enable webhooks, and click **Verify** in LINE Developers.
+9. Redeploy. Sign in or link LINE, add the Official Account, enable LINE messages in Settings, and send a test message.
+
+The webhook validates `x-line-signature` against the untouched request body before processing it. LINE user IDs and friendship state are server-managed; authenticated browser clients can only read their own connection row.
 
 ## Environment variables
 
-See `.env.example`. Public variables are limited to Supabase anon configuration and Firebase's public web-app configuration. Never prefix OpenAI, Firebase Admin, cron, or Supabase service-role secrets with `NEXT_PUBLIC_`.
+See `.env.example`. Public variables are limited to non-secret browser configuration. Never prefix Gemini, Firebase Admin, LINE channel credentials, cron, or Supabase service-role secrets with `NEXT_PUBLIC_`.
 
 ## Validation
 
@@ -165,16 +203,17 @@ pnpm build
 ## Vercel deployment
 
 1. Import the repository into Vercel.
-2. Add the contents of `.env.local` under Project Settings → Environment Variables.
+2. Add the required variables from `.env.example` under Project Settings → Environment Variables. Never paste `.env.local` wholesale if it contains local-only or obsolete secrets.
 3. Add the production URL to Supabase Authentication redirect URLs.
 4. Deploy with the default Next.js build command, or run:
 
 ```bash
-pnpm vercel
-pnpm vercel --prod
+pnpm dlx vercel@latest login
+pnpm dlx vercel@latest
+pnpm dlx vercel@latest --prod
 ```
 
-No cron is enabled in this Phase 1–2 build. In Phase 5, configure a daily Vercel Cron request to `/api/cron/expiration-reminders` and validate `Authorization: Bearer $CRON_SECRET`; set the same strong random `CRON_SECRET` in Vercel. Avoid adding an unprotected cron schedule.
+`vercel.json` schedules `/api/cron/expiration-reminders` daily at 00:00 UTC. Add a strong `CRON_SECRET` to Vercel; Vercel Cron sends it as `Authorization: Bearer $CRON_SECRET`. Also add a server-only Supabase service-role or secret key. The endpoint accepts GET for Vercel and POST for Supabase Cron/manual verification.
 
 ## Security notes
 
@@ -187,7 +226,7 @@ No cron is enabled in this Phase 1–2 build. In Phase 5, configure a daily Verc
 
 ## Known limitations
 
-- Phases 3–5 are not implemented yet: barcode/OFF lookup, food and label vision, recipes/search, push notifications, and cron reminders.
+- Live AI, FCM, and LINE delivery require external credentials; mock AI and in-app notification fallbacks remain available without them.
 - HEIC is accepted by Storage where the browser supplies the correct MIME type, but browser decoding varies; the capture component reports unsupported decoding and asks for JPEG/PNG.
 - Receipt extraction quality depends on lighting, crop, receipt layout, and the selected model. Receipts normally do not include expiration dates.
 - The rate limiter is per server process. Image deletion is available through storage policies but a dedicated receipt-delete UI is deferred.

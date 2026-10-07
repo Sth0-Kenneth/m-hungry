@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { extractReceipt } from "@/lib/ai/receipt";
+import { GeminiRequestError } from "@/lib/ai/client";
 import { getI18n } from "@/lib/i18n/server";
 
 const input = z.object({ imagePath: z.string().min(5).max(500) });
@@ -28,6 +29,15 @@ export async function POST(request: Request) {
     return NextResponse.json(receipt);
   } catch (reason) {
     console.error("Receipt processing failed", reason instanceof Error ? reason.message : "unknown");
+    if (reason instanceof GeminiRequestError && reason.status === 429) {
+      return NextResponse.json(
+        { error: t("receipt.aiRateLimited") },
+        {
+          status: 429,
+          headers: reason.retryAfter ? { "Retry-After": reason.retryAfter } : undefined,
+        },
+      );
+    }
     return NextResponse.json({ error: t("receipt.unclear") }, { status: 502 });
   }
 }
