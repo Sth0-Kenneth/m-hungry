@@ -4,7 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { receiptAiSchema } from "@/lib/validation";
 import { getI18n } from "@/lib/i18n/server";
 
-const schema = receiptAiSchema.extend({ imagePath: z.string().min(5).max(500) });
+const schema = receiptAiSchema.extend({
+  imagePath: z.string().min(5).max(500),
+  rawOcrText: z.string().trim().min(8).max(30_000),
+});
 
 export async function POST(request: Request) {
   const { t } = await getI18n();
@@ -27,6 +30,7 @@ export async function POST(request: Request) {
       p_subtotal: receipt.subtotal,
       p_tax: receipt.tax,
       p_total: receipt.total,
+      p_raw_ocr_text: receipt.rawOcrText,
       p_items: receipt.items,
     });
     if (error) {

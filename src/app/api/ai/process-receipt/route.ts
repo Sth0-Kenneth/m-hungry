@@ -6,7 +6,11 @@ import { extractReceipt } from "@/lib/ai/receipt";
 import { GeminiRequestError } from "@/lib/ai/client";
 import { getI18n } from "@/lib/i18n/server";
 
-const input = z.object({ imagePath: z.string().min(5).max(500) });
+const input = z.object({
+  imagePath: z.string().min(5).max(500),
+  ocrText: z.string().trim().min(8).max(30_000),
+  ocrConfidence: z.number().min(0).max(100).optional(),
+});
 
 export async function POST(request: Request) {
   const { t } = await getI18n();
@@ -23,9 +27,9 @@ export async function POST(request: Request) {
     if (!parsed.success || !parsed.data.imagePath.startsWith(`${user.id}/`)) {
       return NextResponse.json({ error: t("receipt.invalidPath") }, { status: 400 });
     }
-    const { data, error } = await supabase.storage.from("receipts").createSignedUrl(parsed.data.imagePath, 60);
+    const { error } = await supabase.storage.from("receipts").createSignedUrl(parsed.data.imagePath, 60);
     if (error) return NextResponse.json({ error: t("receipt.imageNotFound") }, { status: 404 });
-    const receipt = await extractReceipt(data.signedUrl);
+    const receipt = await extractReceipt(parsed.data.ocrText);
     return NextResponse.json(receipt);
   } catch (reason) {
     console.error("Receipt processing failed", reason instanceof Error ? reason.message : "unknown");

@@ -10,6 +10,7 @@ import { imageStoragePath, imageUploadDetails } from "@/lib/image-upload";
 import type { ReceiptDraft } from "@/lib/types";
 import { receiptAiSchema } from "@/lib/validation";
 import { toast } from "sonner";
+import { recognizeReceiptText } from "@/lib/ocr/receipt";
 
 export function ReceiptScanner() {
   const { t, locale } = useI18n();
@@ -17,11 +18,14 @@ export function ReceiptScanner() {
   const [file, setFile] = useState<File>();
   const [draft, setDraft] = useState<ReceiptDraft>();
   const [imagePath, setImagePath] = useState("");
+  const [ocrText, setOcrText] = useState("");
+  const [ocrProgress, setOcrProgress] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   async function process() {
     if (!file) return;
+    let uploadedPath = "";
     setBusy(true);
     setError("");
     try {
@@ -36,17 +40,32 @@ export function ReceiptScanner() {
         .from("receipts")
         .upload(path, file, { contentType: upload.contentType, upsert: false });
       if (uploadError) throw new Error(t("receipt.uploadFailed"));
+      uploadedPath = path;
       setImagePath(path);
+      setOcrProgress(0);
+      const ocr = await recognizeReceiptText(file, ({ progress }) => {
+        setOcrProgress(Math.round(progress * 100));
+      });
+      if (ocr.text.length < 8) throw new Error(t("receipt.ocrFailed"));
+      setOcrText(ocr.text);
       const response = await fetch("/api/ai/process-receipt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imagePath: path }),
+        body: JSON.stringify({
+          imagePath: path,
+          ocrText: ocr.text,
+          ocrConfidence: ocr.confidence,
+        }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || t("receipt.processFailed"));
       setDraft(receiptAiSchema.parse(body));
       toast.success(t("receipt.readSuccess"));
     } catch (reason) {
+      if (uploadedPath) {
+        await createClient().storage.from("receipts").remove([uploadedPath]).catch(() => undefined);
+        setImagePath("");
+      }
       setError(reason instanceof Error ? reason.message : t("receipt.processFailed"));
     } finally {
       setBusy(false);
@@ -73,7 +92,7 @@ export function ReceiptScanner() {
       const response = await fetch("/api/receipts/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imagePath, ...draft }),
+        body: JSON.stringify({ imagePath, rawOcrText: ocrText, ...draft }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || t("receipt.saveFailed"));
@@ -95,6 +114,16 @@ export function ReceiptScanner() {
           {busy && <LoaderCircle className="animate-spin" />}
           {t("receipt.read")}
         </button>
+        {busy && ocrProgress > 0 && (
+          <div className="mt-3" role="status" aria-live="polite">
+            <div className="mb-1 flex justify-between text-xs text-[#687970]">
+              <span>{t("receipt.ocrProgress")}</span><span>{ocrProgress}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-[#dfe5de]">
+              <div className="h-full bg-[#174c37] transition-[width]" style={{ width: `${ocrProgress}%` }} />
+            </div>
+          </div>
+        )}
         {error && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-800">{error}</p>}
         <p className="mt-4 text-xs text-[#687970]">{t("receipt.privacy")}</p>
       </div>
@@ -127,6 +156,11 @@ export function ReceiptScanner() {
           <input type="number" className="input" value={draft.total ?? ""} onChange={(event) => setDraft({ ...draft, total: event.target.value ? Number(event.target.value) : null })} />
         </label>
       </div>
+      <details className="card p-4">
+        <summary className="cursor-pointer font-bold">{t("receipt.ocrText")}</summary>
+        <p className="mt-2 text-xs text-[#687970]">{t("receipt.ocrTextCopy")}</p>
+        <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-[#f5f6f2] p-3 text-xs">{ocrText}</pre>
+      </details>
       <div className="space-y-3">
         {draft.items.map((item, index) => (
           <article className="card p-4" key={index}>

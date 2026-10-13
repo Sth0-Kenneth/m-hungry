@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const sql = readFileSync(resolve(process.cwd(), "supabase/migrations/202607220001_initial_schema.sql"), "utf8");
 const phase = readFileSync(resolve(process.cwd(), "supabase/migrations/20260901020407_phase_3_5_features.sql"), "utf8");
 const line = readFileSync(resolve(process.cwd(), "supabase/migrations/20261007043623_line_integration.sql"), "utf8");
+const receiptOcr = readFileSync(resolve(process.cwd(), "supabase/migrations/20261013021826_receipt_ocr_text.sql"), "utf8");
 
 describe("row-level user data assumptions", () => {
   it("enables RLS and scopes owned tables to auth.uid", () => {
@@ -24,5 +25,12 @@ describe("row-level user data assumptions", () => {
     expect(line).toContain("using ((select auth.uid()) = user_id)");
     expect(line).toContain("revoke all on table public.line_connections from anon, authenticated");
     expect(line).toContain("grant select on table public.line_connections to authenticated");
+  });
+  it("stores OCR text through the authenticated receipt transaction", () => {
+    expect(receiptOcr).toContain("security invoker");
+    expect(receiptOcr).toContain("raw_ocr_text");
+    expect(receiptOcr).toContain("revoke all on function public.confirm_receipt");
+    expect(receiptOcr).toContain("revoke all on function public.handle_new_user()");
+    expect(receiptOcr).toContain("to authenticated");
   });
 });

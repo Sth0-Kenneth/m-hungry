@@ -27,6 +27,7 @@ AI results are suggestions only. Users must confirm every scanned value. Expirat
 - Reusable rear-camera/gallery capture with image resizing and permission/error states
 - Private receipt upload under `{userId}/{year}/{month}/{uuid}.jpg`
 - Server-only Gemini receipt processing with a safe Japanese mock fallback
+- On-device Japanese/English receipt OCR; only extracted text is sent to Gemini for structuring
 - Editable store, date, total, original OCR name, normalized name, quantity, unit, and price
 - Atomic receipt, purchase, purchase-item, and chosen inventory insertion
 - Purchase history and details
@@ -146,9 +147,9 @@ GEMINI_API_KEY=YOUR_KEY
 GEMINI_MODEL=gemini-2.5-flash
 ```
 
-Gemini is called only from authenticated server routes. The Interactions API uses structured JSON schemas and multimodal image input. Recipe search accepts only URLs returned as Google Search grounding citations before Gemini creates short summaries. Signed image URLs expire after 60 seconds, requests time out after 45 seconds, malformed structured responses are retried once, and images/secrets are never logged. `GEMINI_API_KEY` belongs in `.env.local` or Vercel Environment Variables—not in the Settings page or any `NEXT_PUBLIC_` variable.
+Gemini is called only from authenticated server routes. Receipt images are processed by Tesseract.js in the browser, and only normalized OCR text is sent to Gemini for receipt structuring. Food and expiration recognition still use multimodal image input. Recipe search accepts only URLs returned as Google Search grounding citations before Gemini creates short summaries. Requests time out after 45 seconds, malformed structured responses are retried once, and images/secrets are never logged. `GEMINI_API_KEY` belongs in `.env.local` or Vercel Environment Variables—not in the Settings page or any `NEXT_PUBLIC_` variable.
 
-Gemini's free tier has usage limits and Google states that free-tier content may be used to improve its products. Review the current Google AI terms before processing real receipts or food images; keep `USE_MOCK_AI=true` if you do not want images sent to Gemini.
+Gemini's free tier has usage limits and Google states that free-tier content may be used to improve its products. Review the current Google AI terms before processing receipt OCR text, food images, or expiration images; keep `USE_MOCK_AI=true` if you do not want content sent to Gemini.
 
 ## Firebase Cloud Messaging
 
