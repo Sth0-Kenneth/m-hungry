@@ -6,9 +6,10 @@ import type { InventoryItem } from "@/lib/types";
 import { ExpirationBadge } from "./expiration-badge";
 import { useI18n } from "./locale-provider";
 import type { TranslationKey } from "@/lib/i18n/dictionaries";
+import { formatQuantityUnit } from "@/lib/business/units";
 
 export function InventoryCard({ item }: { item: InventoryItem }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const storageKey = `storage.${item.storage_location}` as TranslationKey;
   return (
     <Link href={`/inventory/${item.id}`} className="card block p-4 transition hover:-translate-y-0.5 hover:shadow-md">
@@ -22,7 +23,7 @@ export function InventoryCard({ item }: { item: InventoryItem }) {
         <ExpirationBadge date={item.expiration_date} />
       </div>
       <div className="mt-5 flex items-center justify-between text-sm">
-        <b>{item.quantity} {item.unit}</b>
+        <b>{formatQuantityUnit(Number(item.quantity), item.unit, locale)}</b>
         <span className="flex items-center gap-1 text-[#687970]">
           <MapPin size={14} />
           {t(storageKey)}

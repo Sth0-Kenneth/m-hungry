@@ -13,7 +13,7 @@ const input = z.object({
 });
 
 export async function POST(request: Request) {
-  const { t } = await getI18n();
+  const { t, locale } = await getI18n();
   try {
     const supabase = await createClient();
     const {
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     }
     const { error } = await supabase.storage.from("receipts").createSignedUrl(parsed.data.imagePath, 60);
     if (error) return NextResponse.json({ error: t("receipt.imageNotFound") }, { status: 404 });
-    const receipt = await extractReceipt(parsed.data.ocrText);
+    const receipt = await extractReceipt(parsed.data.ocrText, locale);
     return NextResponse.json(receipt);
   } catch (reason) {
     console.error("Receipt processing failed", reason instanceof Error ? reason.message : "unknown");

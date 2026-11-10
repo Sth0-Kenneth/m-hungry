@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { receiptAiSchema } from "@/lib/validation";
 import { getI18n } from "@/lib/i18n/server";
+import { normalizeInventoryMeasurement } from "@/lib/business/units";
 
 const schema = receiptAiSchema.extend({
   imagePath: z.string().min(5).max(500),
@@ -10,7 +11,7 @@ const schema = receiptAiSchema.extend({
 });
 
 export async function POST(request: Request) {
-  const { t } = await getI18n();
+  const { t, locale } = await getI18n();
   try {
     const supabase = await createClient();
     const {
@@ -22,6 +23,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: t("receipt.invalidFields") }, { status: 400 });
     }
     const receipt = parsed.data;
+    const items = receipt.items.map((item) => {
+      const normalized = normalizeInventoryMeasurement({
+        name: `${item.normalizedName} ${item.rawName}`,
+        category: item.category,
+        quantity: item.quantity,
+        unit: item.unit,
+      }, locale);
+      return { ...item, quantity: normalized.quantity, unit: normalized.unit };
+    });
     const { data, error } = await supabase.rpc("confirm_receipt", {
       p_image_path: receipt.imagePath,
       p_store_name: receipt.storeName,
@@ -31,7 +41,7 @@ export async function POST(request: Request) {
       p_tax: receipt.tax,
       p_total: receipt.total,
       p_raw_ocr_text: receipt.rawOcrText,
-      p_items: receipt.items,
+      p_items: items,
     });
     if (error) {
       console.error("Receipt confirmation failed", error.code);

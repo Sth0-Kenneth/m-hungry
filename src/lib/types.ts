@@ -2,6 +2,6 @@ export type InventoryStatus="available"|"finished"|"discarded"|"donated"|"expire
 
 export type DetectedFood = { name:string; category:string|null; estimatedQuantity:number; unit:string; confidence:number };
 export type ExpirationCandidate = { value:string|null; label:string|null; confidence:number; yearMissing:boolean; suggestedYear:number|null; nearbyText:string|null };
-export type RecipeIngredient = { name:string; quantity:number; unit:string; inventoryItemId?:string|null; available?:boolean };
+export type RecipeIngredient = { name:string; quantity:number; requiredQuantity?:number; unit:string; inventoryItemId?:string|null; available?:boolean };
 export type RecipeDraft = { title:string; description:string; difficulty:string; cookingTimeMinutes:number; servings:number; ingredientsUsed:RecipeIngredient[]; missingIngredients:RecipeIngredient[]; steps:string[]; safetyNotes:string[]; mock?:boolean };
 export type WebRecipeResult = { title:string; sourceDomain:string; sourceUrl:string; summary:string; ingredientsHighlighted:string[]; mock?:boolean };
