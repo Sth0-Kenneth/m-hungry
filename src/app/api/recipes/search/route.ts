@@ -5,7 +5,7 @@ import type { InventoryItem } from "@/lib/types";
 import { recipeSearchRequestSchema } from "@/lib/validation";
 
 export async function POST(request: Request) {
-  const auth = await authenticated("recipe-search", 8);
+  const auth = await authenticated("recipe-search", 8, { ai: true });
   if ("response" in auth) return auth.response;
 
   const body = await request.json().catch(() => null);

@@ -13,6 +13,7 @@ const serverSchema = z.object({
   LINE_MESSAGING_CHANNEL_ACCESS_TOKEN: z.string().min(1).optional(),
   LINE_MESSAGING_CHANNEL_SECRET: z.string().min(1).optional(),
   USE_MOCK_AI: z.enum(["true", "false"]).default("true"),
+  AI_DAILY_LIMIT: z.coerce.number().int().min(1).max(10_000).default(100),
 });
 
 export const serverEnv = serverSchema.parse({
@@ -27,4 +28,5 @@ export const serverEnv = serverSchema.parse({
   LINE_MESSAGING_CHANNEL_ACCESS_TOKEN: process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN,
   LINE_MESSAGING_CHANNEL_SECRET: process.env.LINE_MESSAGING_CHANNEL_SECRET,
   USE_MOCK_AI: process.env.USE_MOCK_AI,
+  AI_DAILY_LIMIT: process.env.AI_DAILY_LIMIT,
 });

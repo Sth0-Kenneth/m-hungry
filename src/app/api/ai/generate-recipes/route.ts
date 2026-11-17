@@ -6,7 +6,7 @@ import type { InventoryItem } from "@/lib/types";
 import { getLocale } from "@/lib/i18n/server";
 
 export async function POST(request:Request){
- const auth=await authenticated("recipes",5);if("response" in auth)return auth.response;
+ const auth=await authenticated("recipes",5,{ai:true});if("response" in auth)return auth.response;
  const parsed=recipeRequestSchema.safeParse(await request.json());if(!parsed.success)return NextResponse.json({error:"Invalid recipe preferences"},{status:400});
  const {data}=await auth.supabase.from("inventory_items").select("*").eq("user_id",auth.user.id).eq("status","available").gt("quantity",0).order("expiration_date",{ascending:true,nullsFirst:false}).limit(60);
  if(!data?.length)return NextResponse.json({error:"Add inventory items before generating recipes."},{status:400});

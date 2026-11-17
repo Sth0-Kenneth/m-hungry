@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { rateLimit } from "@/lib/rate-limit";
+import { consumeRequestLimits } from "@/lib/api";
 import { extractReceipt } from "@/lib/ai/receipt";
 import { GeminiRequestError } from "@/lib/ai/client";
 import { getI18n } from "@/lib/i18n/server";
@@ -20,8 +20,12 @@ export async function POST(request: Request) {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: t("receipt.authRequired") }, { status: 401 });
-    if (!rateLimit(`receipt:${user.id}`, 5, 60_000)) {
-      return NextResponse.json({ error: t("receipt.rateLimited") }, { status: 429 });
+    const limited = await consumeRequestLimits(supabase, user.id, "receipt", 5, true);
+    if (limited !== "ok") {
+      return NextResponse.json(
+        { error: t(limited === "daily" ? "receipt.dailyLimited" : "receipt.rateLimited") },
+        { status: 429 },
+      );
     }
     const parsed = input.safeParse(await request.json());
     if (!parsed.success || !parsed.data.imagePath.startsWith(`${user.id}/`)) {

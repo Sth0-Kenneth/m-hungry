@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   if (!identity) return NextResponse.json({ error: "A verified LINE identity is not linked to this account." }, { status: 409 });
 
   const friendStatus = parsed.data.providerToken
-    ? await getLineFriendshipStatus(parsed.data.providerToken).catch(() => "unknown" as const)
+    ? await getLineFriendshipStatus(parsed.data.providerToken, identity.lineUserId).catch(() => "unknown" as const)
     : "unknown" as const;
   const values: Record<string, unknown> = {
     user_id: auth.user.id,

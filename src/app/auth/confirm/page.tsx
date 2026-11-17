@@ -3,12 +3,21 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
-import type { EmailOtpType } from "@supabase/supabase-js";
+import type { EmailOtpType, SupabaseClient } from "@supabase/supabase-js";
 import { Leaf, LoaderCircle } from "lucide-react";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useI18n } from "@/components/locale-provider";
+import { safeNextPath } from "@/lib/safe-redirect";
 
-type ConfirmationStatus = "confirming" | "failed";
+type ConfirmationStatus = "confirming" | "review" | "failed";
+
+type PendingSession = {
+  supabase: SupabaseClient;
+  accessToken: string;
+  refreshToken: string;
+  next: string;
+  linkLine: boolean;
+};
 
 const allowedOtpTypes = new Set<EmailOtpType>([
   "signup",
@@ -19,16 +28,25 @@ const allowedOtpTypes = new Set<EmailOtpType>([
   "email",
 ]);
 
-function safeNextPath(value: string | null) {
-  return value?.startsWith("/") && !value.startsWith("//")
-    ? value
-    : "/dashboard";
+async function finishSignIn(supabase: SupabaseClient, next: string, linkLine: boolean) {
+  if (linkLine) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    await fetch("/api/line/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ providerToken: sessionData.session?.provider_token }),
+    }).catch(() => undefined);
+  }
+
+  window.location.replace(next);
 }
 
 export default function ConfirmAccountPage() {
   const { t } = useI18n();
   const [status, setStatus] = useState<ConfirmationStatus>("confirming");
+  const [accountEmail, setAccountEmail] = useState("");
   const confirmationStarted = useRef(false);
+  const pendingSession = useRef<PendingSession | null>(null);
 
   useEffect(() => {
     if (confirmationStarted.current) return;
@@ -38,6 +56,7 @@ export default function ConfirmAccountPage() {
       const query = new URLSearchParams(window.location.search);
       const fragment = new URLSearchParams(window.location.hash.slice(1));
       const next = safeNextPath(query.get("next"));
+      const linkLine = query.get("line") === "1";
       window.history.replaceState(null, "", window.location.pathname);
 
       if (
@@ -61,7 +80,6 @@ export default function ConfirmAccountPage() {
         isSingleton: false,
         auth: { detectSessionInUrl: false },
       });
-
       const accessToken = fragment.get("access_token");
       const refreshToken = fragment.get("refresh_token");
       const code = query.get("code");
@@ -70,10 +88,19 @@ export default function ConfirmAccountPage() {
 
       let error: Error | null = null;
       if (accessToken && refreshToken) {
-        ({ error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        }));
+        // Tokens in the URL fragment can belong to anyone's account, so a
+        // crafted link could silently sign the visitor in as the attacker
+        // (login CSRF). Validate the token, then let the visitor confirm the
+        // account before the session is stored in this browser.
+        const { data: tokenUser, error: userError } = await supabase.auth.getUser(accessToken);
+        if (userError || !tokenUser.user) {
+          setStatus("failed");
+          return;
+        }
+        pendingSession.current = { supabase, accessToken, refreshToken, next, linkLine };
+        setAccountEmail(tokenUser.user.email ?? tokenUser.user.id);
+        setStatus("review");
+        return;
       } else if (code) {
         ({ error } = await supabase.auth.exchangeCodeForSession(code));
       } else if (tokenHash && type && allowedOtpTypes.has(type)) {
@@ -90,20 +117,29 @@ export default function ConfirmAccountPage() {
         return;
       }
 
-      if (query.get("line") === "1") {
-        const { data: sessionData } = await supabase.auth.getSession();
-        await fetch("/api/line/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ providerToken: sessionData.session?.provider_token }),
-        }).catch(() => undefined);
-      }
-
-      window.location.replace(next);
+      await finishSignIn(supabase, next, linkLine);
     }
 
     void confirmAccount();
   }, []);
+
+  async function continueWithPendingSession() {
+    const pending = pendingSession.current;
+    if (!pending) return;
+    pendingSession.current = null;
+    setStatus("confirming");
+
+    const { error } = await pending.supabase.auth.setSession({
+      access_token: pending.accessToken,
+      refresh_token: pending.refreshToken,
+    });
+    if (error) {
+      setStatus("failed");
+      return;
+    }
+
+    await finishSignIn(pending.supabase, pending.next, pending.linkLine);
+  }
 
   return (
     <main className="grid min-h-screen place-items-center px-4 py-12">
@@ -128,6 +164,24 @@ export default function ConfirmAccountPage() {
               <p className="mt-2 text-sm text-[#687970]">
                 {t("auth.confirmingCopy")}
               </p>
+            </>
+          ) : status === "review" ? (
+            <>
+              <h1 className="text-2xl">{t("auth.continueTitle")}</h1>
+              <p className="mt-2 text-sm text-[#687970]">
+                {t("auth.continueCopy")}
+              </p>
+              <p className="mt-4 break-all font-bold">{accountEmail}</p>
+              <button
+                type="button"
+                className="btn-primary mt-6 w-full"
+                onClick={() => void continueWithPendingSession()}
+              >
+                {t("auth.continue")}
+              </button>
+              <Link href="/login" className="btn-secondary mt-3 w-full">
+                {t("auth.notMyAccount")}
+              </Link>
             </>
           ) : (
             <>

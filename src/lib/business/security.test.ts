@@ -6,6 +6,8 @@ const sql = readFileSync(resolve(process.cwd(), "supabase/migrations/20260722000
 const phase = readFileSync(resolve(process.cwd(), "supabase/migrations/20260901020407_phase_3_5_features.sql"), "utf8");
 const line = readFileSync(resolve(process.cwd(), "supabase/migrations/20261007043623_line_integration.sql"), "utf8");
 const receiptOcr = readFileSync(resolve(process.cwd(), "supabase/migrations/20261013021826_receipt_ocr_text.sql"), "utf8");
+const limits = readFileSync(resolve(process.cwd(), "supabase/migrations/20261117000100_shared_rate_limits_and_cleanup.sql"), "utf8");
+const ownership = readFileSync(resolve(process.cwd(), "supabase/migrations/20261117000000_cross_tenant_reference_hardening.sql"), "utf8");
 
 describe("row-level user data assumptions", () => {
   it("enables RLS and scopes owned tables to auth.uid", () => {
@@ -32,5 +34,18 @@ describe("row-level user data assumptions", () => {
     expect(receiptOcr).toContain("revoke all on function public.confirm_receipt");
     expect(receiptOcr).toContain("revoke all on function public.handle_new_user()");
     expect(receiptOcr).toContain("to authenticated");
+  });
+  it("prevents cross-user references and client-created notifications", () => {
+    expect(ownership).toContain("revoke insert, update, delete, truncate on table public.notifications from anon, authenticated");
+    expect(ownership).toContain("grant update (read_at) on table public.notifications to authenticated");
+    expect(ownership).toContain("foreign key (inventory_item_id, user_id) references public.inventory_items (id, user_id)");
+    expect(ownership).toContain("foreign key (purchase_item_id, user_id) references public.purchase_items (id, user_id)");
+    expect(ownership).toContain("foreign key (purchase_id, user_id) references public.purchases (id, user_id)");
+    expect(ownership).toContain("foreign key (receipt_id, user_id) references public.receipts (id, user_id)");
+  });
+  it("keeps rate-limit counters private and keyed to the caller", () => {
+    expect(limits).toContain("revoke all on table public.rate_limits from public, anon, authenticated");
+    expect(limits).toContain("v_key := p_bucket || ':' || p_window_seconds || ':' || v_uid::text");
+    expect(limits).toContain("drop function if exists public.record_inventory_usage");
   });
 });

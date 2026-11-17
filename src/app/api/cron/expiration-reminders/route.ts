@@ -5,9 +5,10 @@ import { serverEnv } from "@/lib/server-env";
 import { adminMessaging } from "@/lib/firebase-admin";
 import { getSiteUrl } from "@/lib/site-url";
 import { isLineMessagingConfigured, sendLinePush } from "@/lib/line/messaging";
+import { secureEquals } from "@/lib/secure-compare";
 
 async function run(request: Request) {
-  if (!serverEnv.CRON_SECRET || request.headers.get("authorization") !== `Bearer ${serverEnv.CRON_SECRET}`) {
+  if (!serverEnv.CRON_SECRET || !secureEquals(request.headers.get("authorization"), `Bearer ${serverEnv.CRON_SECRET}`)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const secret = serverEnv.SUPABASE_SERVICE_ROLE_KEY ?? serverEnv.SUPABASE_SECRET_KEY;
