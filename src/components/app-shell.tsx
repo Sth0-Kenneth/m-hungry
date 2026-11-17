@@ -68,7 +68,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <nav
         aria-label={t("nav.primary")}
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-[#d9ded5] bg-white/95 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+        className="safe-area-bottom fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-[#d9ded5] bg-white/95 px-1 backdrop-blur md:hidden"
       >
         {links.map(([href, key, Icon]) => (
           <Link

@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 import { requireUser } from "@/lib/auth";
-import { inventorySchema, usageSchema } from "@/lib/validation";
-import { reduceQuantity } from "@/lib/business/inventory";
+import { inventorySchema } from "@/lib/validation";
 import { getI18n } from "@/lib/i18n/server";
 
 function value(form: FormData, key: string) {
@@ -17,7 +17,6 @@ function inventoryInput(form: FormData) {
     name: value(form, "name"),
     category: value(form, "category"),
     brand: value(form, "brand"),
-    barcode: value(form, "barcode"),
     quantity: form.get("quantity"),
     unit: value(form, "unit"),
     purchase_date: value(form, "purchase_date"),
@@ -51,7 +50,11 @@ export async function updateItem(id: string, form: FormData) {
   const parsed = inventorySchema.safeParse(inventoryInput(form));
   if (!parsed.success) throw new Error(t("form.invalidItem"));
   const { user, supabase } = await requireUser();
-  const { error } = await supabase.from("inventory_items").update(parsed.data).eq("id", id).eq("user_id", user.id);
+  const { error } = await supabase
+    .from("inventory_items")
+    .update(parsed.data)
+    .eq("id", id)
+    .eq("user_id", user.id);
   if (error) throw new Error(t("form.updateFailed"));
   revalidatePath(`/inventory/${id}`);
   revalidatePath("/inventory");
@@ -60,44 +63,55 @@ export async function updateItem(id: string, form: FormData) {
 export async function deleteItem(id: string) {
   const { t } = await getI18n();
   const { user, supabase } = await requireUser();
-  const { error } = await supabase.from("inventory_items").delete().eq("id", id).eq("user_id", user.id);
+  const { error } = await supabase
+    .from("inventory_items")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
   if (error) throw new Error(t("form.deleteFailed"));
   redirect("/inventory");
 }
 
 export async function markOpened(id: string) {
   const { user, supabase } = await requireUser();
-  await supabase.from("inventory_items").update({ opened_date: new Date().toISOString().slice(0, 10) }).eq("id", id).eq("user_id", user.id);
+  await supabase
+    .from("inventory_items")
+    .update({ opened_date: new Date().toISOString().slice(0, 10) })
+    .eq("id", id)
+    .eq("user_id", user.id);
   revalidatePath(`/inventory/${id}`);
 }
 
-export async function recordUsage(form: FormData) {
+const quantityAdjustmentSchema = z.object({
+  id: z.string().uuid(),
+  delta: z.number().finite().min(-100000).max(100000).refine((value) => value !== 0),
+});
+
+export type QuantityAdjustmentResult =
+  | { ok: true; quantity: number }
+  | { ok: false; error: string };
+
+export async function adjustInventoryQuantity(
+  id: string,
+  requestedDelta: number,
+): Promise<QuantityAdjustmentResult> {
   const { t } = await getI18n();
-  const parsed = usageSchema.safeParse({
-    inventory_item_id: form.get("inventory_item_id"),
-    action: form.get("action"),
-    quantity: form.get("quantity"),
-    unit: form.get("unit"),
-    note: form.get("note"),
+  const delta = Math.round(requestedDelta * 1000) / 1000;
+  const parsed = quantityAdjustmentSchema.safeParse({ id, delta });
+  if (!parsed.success) return { ok: false, error: t("inventory.quantityUpdateFailed") };
+
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase.rpc("adjust_inventory_quantity", {
+    p_inventory_item_id: parsed.data.id,
+    p_delta: parsed.data.delta,
   });
-  if (!parsed.success) throw new Error(t("form.invalidUsage"));
-  const { user, supabase } = await requireUser();
-  const { data: item } = await supabase.from("inventory_items").select("quantity,unit_price").eq("id", parsed.data.inventory_item_id).eq("user_id", user.id).single();
-  if (!item) throw new Error(t("form.itemNotFound"));
-  const { remaining, depleted } = reduceQuantity(Number(item.quantity), parsed.data.quantity);
-  const status = parsed.data.action === "discarded" ? "discarded" : parsed.data.action === "donated" ? "donated" : depleted ? "finished" : "available";
-  const estimated = (Number(item.unit_price) || 0) * parsed.data.quantity;
-  const { error } = await supabase.rpc("record_inventory_usage", {
-    p_inventory_item_id: parsed.data.inventory_item_id,
-    p_action: parsed.data.action,
-    p_quantity: parsed.data.quantity,
-    p_unit: parsed.data.unit,
-    p_note: parsed.data.note ?? null,
-    p_estimated_value: estimated,
-    p_remaining: remaining,
-    p_status: status,
-  });
-  if (error) throw new Error(t("form.usageFailed"));
+
+  const result = Array.isArray(data) ? data[0] : data;
+  if (error || !result) return { ok: false, error: t("inventory.quantityUpdateFailed") };
+
+  revalidatePath(`/inventory/${id}`);
   revalidatePath("/inventory");
+  revalidatePath("/dashboard");
   revalidatePath("/usage");
+  return { ok: true, quantity: Number(result.quantity) };
 }
